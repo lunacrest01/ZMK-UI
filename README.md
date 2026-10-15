@@ -1,4 +1,4 @@
-# Braxon Studio and TAC-W Firmware
+MACROPAD Studio and MACROPAD Firmware
 
 The working Braxon Studio web configurator and custom ZMK firmware for the
 TAC-W nRF52840 macropad: 12 keys, two rotary encoders, four WS2812 LEDs,
