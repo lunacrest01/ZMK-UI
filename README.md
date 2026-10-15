@@ -41,13 +41,3 @@ browser device access. GitHub Pages can also serve the root static files.
 
 Application and website launchers send keyboard macros. Application launchers
 accept a manually entered path or command.
-
-## Firmware
-
-See [firmware/README.md](firmware/README.md) for the exact board, current pin
-assignments, bootloader layout, and build instructions. The internal shield
-identifier remains `wire_x` because the existing source and stored settings
-use it; the visible device name is `TAC-W`.
-
-The supplied images use a custom no-SoftDevice memory layout. Check the
-firmware notes before flashing a different board or bootloader.
