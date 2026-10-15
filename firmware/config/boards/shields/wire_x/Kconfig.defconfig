@@ -1,0 +1,6 @@
+if SHIELD_WIRE_X
+
+config ZMK_KEYBOARD_NAME
+    default "TAC-W"
+
+endif

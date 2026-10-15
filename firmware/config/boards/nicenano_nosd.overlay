@@ -1,0 +1,49 @@
+/*
+ * This Robu/nice!nano-style UF2 bootloader has no SoftDevice.
+ * Link the app at 0x1000, matching the Zephyr BLE bridge that boots here.
+ */
+
+&flash0 {
+	/delete-node/ partitions;
+
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		reserved_partition_0: partition@0 {
+			label = "MBR";
+			read-only;
+			reg = <0x00000000 0x00001000>;
+		};
+
+		code_partition: partition@1000 {
+			label = "Application";
+			reg = <0x00001000 0x000eb000>;
+		};
+
+		storage_partition: partition@ec000 {
+			label = "Storage";
+			reg = <0x000ec000 0x00008000>;
+		};
+
+		boot_partition: partition@f4000 {
+			label = "UF2";
+			read-only;
+			reg = <0x000f4000 0x0000c000>;
+		};
+	};
+};
+
+/ {
+	chosen {
+		zmk,battery = &vbatt;
+	};
+
+	vbatt: vbatt {
+		compatible = "zmk,battery-voltage-divider";
+		io-channels = <&adc 0>;
+		output-ohms = <1000000>;
+		full-ohms = <2000000>;
+	};
+};

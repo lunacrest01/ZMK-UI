@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Braxon Studio</title>
+    <link rel="stylesheet" href="./styles.css?v=tac-w-studio-45" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <img class="brand-logo" src="./assets/braxon-logo.jpg" alt="Braxon logo" />
+          <div>
+            <h1>BRAXON STUDIO</h1>
+            <p>TAC-W / CONTROL SURFACE</p>
+          </div>
+        </div>
+
+        <div class="connection-bar">
+          <span id="connectionBadge" class="connection-badge idle">Not connected</span>
+          <button id="usbConnectButton" class="command primary" type="button">Connect USB</button>
+          <button id="bleConnectButton" class="command" type="button">Connect BLE</button>
+          <button id="disconnectButton" class="command subtle" type="button" disabled>Disconnect</button>
+        </div>
+      </header>
+
+      <main id="authorizationShell" class="authorization-shell">
+        <section class="authorization-surface" aria-label="Authorize TAC-W">
+          <img class="authorization-logo" src="./assets/braxon-logo.jpg" alt="Braxon logo" />
+          <div>
+            <div class="section-label">Configure</div>
+            <h2>Authorize TAC-W</h2>
+          </div>
+          <div class="authorization-actions">
+            <button id="authorizeUsbButton" class="command primary" type="button">Authorize USB</button>
+            <button id="authorizeBleButton" class="command" type="button">Authorize BLE</button>
+          </div>
+        </section>
+      </main>
+
+      <main id="studioShell" class="studio-shell" hidden>
+        <aside class="rail">
+          <nav class="mode-nav" aria-label="Studio sections">
+            <button class="mode-tab active" data-panel="keymap" type="button">Keymap</button>
+            <button class="mode-tab" data-panel="encoders" type="button">Encoders</button>
+            <button class="mode-tab" data-panel="macros" type="button">Macros</button>
+            <button class="mode-tab" data-panel="rgb" type="button">RGB</button>
+            <button class="mode-tab" data-panel="display" type="button">Display</button>
+            <button class="mode-tab" data-panel="tester" type="button">Tester</button>
+            <button class="mode-tab" data-panel="console" type="button">Console</button>
+          </nav>
+          <div class="rail-profile-tools">
+            <div class="section-label">Profile</div>
+            <button id="toolbarImportButton" class="command subtle" type="button">Import</button>
+            <button id="toolbarExportButton" class="command subtle" type="button">Export</button>
+            <input id="profileImportFile" type="file" accept="application/json,.json" hidden />
+          </div>
+        </aside>
+
+        <section class="workspace">
+          <div class="toolbar">
+            <div>
+              <div class="section-label">Layer Bank</div>
+              <div id="layerTabs" class="layer-tabs" role="tablist" aria-label="Layers"></div>
+            </div>
+
+            <div class="device-tools">
+              <button id="toolbarSaveButton" class="command primary" type="button">Save</button>
+              <button id="toolbarResetButton" class="command danger" type="button">Reset</button>
+              <button id="toolbarHardResetButton" class="command hard-reset" type="button">Hard Reset</button>
+            </div>
+          </div>
+
+          <section id="keymapPanel" class="editor-panel active">
+            <div class="board-stage">
+              <div class="board-glow" aria-hidden="true"></div>
+              <article class="keyboard" aria-label="TAC-W keyboard layout">
+                <div class="keyboard-top keyboard-top-clean">
+                  <button class="encoder-cap encoder-switch encoder-cap-left" data-position="0" type="button"></button>
+                  <button class="encoder-cap encoder-switch encoder-cap-right" data-position="1" type="button"></button>
+                </div>
+                <div id="keyGrid" class="key-grid"></div>
+              </article>
+            </div>
+          </section>
+
+          <section id="encodersPanel" class="editor-panel">
+            <div class="surface-head">
+              <div>
+                <div class="section-label">Encoder Map</div>
+                <h2>Rotation slots</h2>
+              </div>
+              <span class="status-pill live">Runtime encoder map</span>
+            </div>
+            <div id="encoderGrid" class="encoder-grid"></div>
+          </section>
+
+          <section id="macrosPanel" class="editor-panel">
+            <div class="surface-head">
+              <div>
+                <div class="section-label">Macro Bank</div>
+                <h2>Sequence slots</h2>
+              </div>
+              <div class="macro-head-actions">
+                <span class="status-pill">60 max - rename below</span>
+                <button id="macroAddButton" class="command subtle" type="button">+ New Macro</button>
+              </div>
+            </div>
+            <div class="macro-grid">
+              <section class="macro-slot-list" id="macroList" aria-label="Macro slots"></section>
+              <section class="macro-editor">
+                <label class="macro-name-row">
+                  <span>Rename Macro</span>
+                  <input id="macroName" type="text" maxlength="23" autocomplete="off" />
+                  <small class="field-hint">This name appears in the key library and on the TFT label auto mode.</small>
+                </label>
+                <label class="macro-sequence-row">
+                  <span>Sequence</span>
+                  <textarea id="macroSequence" spellcheck="false"></textarea>
+                </label>
+                <div class="macro-actions">
+                  <label class="delay-row">
+                    <span>Delay</span>
+                    <input id="macroDelay" type="number" min="10" max="5000" step="10" value="100" />
+                  </label>
+                  <button id="macroRecordButton" class="command primary" type="button">Record</button>
+                  <button id="macroAddDelayButton" class="command" type="button">Add Delay</button>
+                  <button id="macroClearButton" class="command subtle" type="button">Clear</button>
+                  <button id="macroDeleteButton" class="command danger" type="button">Delete Macro</button>
+                  <button id="macroSaveButton" class="command primary" type="button">Save Macro</button>
+                </div>
+                <section class="launcher-builder" aria-labelledby="launcherTitle">
+                  <div class="launcher-builder-head">
+                    <div>
+                      <div class="section-label">Launcher Macro</div>
+                      <h3 id="launcherTitle">Open website / app</h3>
+                    </div>
+                    <span class="status-pill">Win + R macro</span>
+                  </div>
+                  <div class="launcher-fields">
+                    <label>
+                      <span>Type</span>
+                      <select id="launcherType">
+                        <option value="website">Website</option>
+                        <option value="app">App path</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Preset</span>
+                      <select id="launcherPreset"></select>
+                    </label>
+                    <label class="launcher-target-row">
+                      <span>Website address</span>
+                      <input id="launcherTarget" type="text" autocomplete="off" placeholder="https://example.com" />
+                    </label>
+                    <div class="launcher-actions">
+                      <button id="launcherBuildButton" class="command primary" type="button">Create &amp; Save</button>
+                    </div>
+                  </div>
+                </section>
+                <div>
+                  <div class="section-label">Insert</div>
+                  <div id="macroKeyPalette" class="macro-key-palette"></div>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section id="rgbPanel" class="editor-panel">
+            <div class="surface-head">
+              <div>
+                <div class="section-label">Lighting</div>
+                <h2>RGB underglow</h2>
+              </div>
+              <span class="status-pill live">WS2812 app control</span>
+            </div>
+            <div class="rgb-grid">
+              <section class="rgb-surface">
+                <label class="toggle-row">
+                  <span>Power</span>
+                  <input id="rgbPower" type="checkbox" />
+                </label>
+                <label class="toggle-row">
+                  <span>4 second layer glow</span>
+                  <input id="rgbLayerMode" type="checkbox" />
+                </label>
+                <label class="rgb-slider">
+                  <span>Hue <output id="rgbHueValue">0</output></span>
+                  <input id="rgbHue" type="range" min="0" max="360" step="1" />
+                </label>
+                <label class="rgb-slider">
+                  <span>Saturation <output id="rgbSaturationValue">100</output></span>
+                  <input id="rgbSaturation" type="range" min="0" max="100" step="1" />
+                </label>
+                <label class="rgb-slider">
+                  <span>Brightness <output id="rgbBrightnessValue">25</output></span>
+                  <input id="rgbBrightness" type="range" min="0" max="100" step="1" />
+                </label>
+                <div class="power-timeouts">
+                  <div>
+                    <div class="section-label">Idle Timeout</div>
+                  </div>
+                  <label class="timeout-row">
+                    <span>RGB <output id="rgbTimeoutValue">10 min</output></span>
+                    <input id="rgbTimeout" type="range" min="1" max="30" step="1" />
+                  </label>
+                </div>
+              </section>
+              <section class="rgb-surface rgb-preview-surface">
+                <div>
+                  <div class="section-label">Effect</div>
+                  <div id="rgbEffects" class="rgb-effects" aria-label="RGB effects">
+                    <button class="choice-button" data-effect="0" type="button">Solid</button>
+                    <button class="choice-button" data-effect="1" type="button">Breathe</button>
+                    <button class="choice-button" data-effect="2" type="button">Spectrum</button>
+                    <button class="choice-button" data-effect="3" type="button">Swirl</button>
+                  </div>
+                </div>
+                <div>
+                  <div class="section-label">Layer Colors</div>
+                  <div id="rgbLayerColors" class="rgb-layer-colors" aria-label="Layer colors"></div>
+                </div>
+                <div class="rgb-preview">
+                  <span id="rgbSwatch" class="rgb-swatch" aria-hidden="true"></span>
+                  <strong id="rgbEffectName">Swirl</strong>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section id="displayPanel" class="editor-panel">
+            <div class="surface-head">
+              <div>
+                <div class="section-label">TFT Labels</div>
+                <h2>Display text</h2>
+              </div>
+              <span class="status-pill live">7 character limit</span>
+            </div>
+            <div class="display-grid">
+              <section class="display-surface">
+                <div class="display-power-card">
+                  <div>
+                    <div class="section-label">Power</div>
+                    <label class="toggle-row display-toggle-row">
+                      <span>Display enabled</span>
+                      <input id="displayPower" type="checkbox" />
+                    </label>
+                    <label class="timeout-row">
+                      <span>Display timeout <output id="displayTimeoutValue">10 min</output></span>
+                      <input id="displayTimeout" type="range" min="1" max="30" step="1" />
+                    </label>
+                  </div>
+                </div>
+                <label class="display-label-row display-layer-row">
+                  <span>Layer name</span>
+                  <input id="displayLayerName" type="text" maxlength="7" autocomplete="off" />
+                </label>
+                <p id="displayEditorNote" class="display-note">Names are written to the TFT display.</p>
+                <div>
+                  <div class="section-label">Encoder Text</div>
+                  <div id="displayEncoderLabels" class="display-label-list"></div>
+                </div>
+              </section>
+              <section class="display-surface">
+                <div class="section-label">Key Text</div>
+                <div id="displayKeyLabels" class="display-key-list"></div>
+              </section>
+            </div>
+          </section>
+
+          <section id="testerPanel" class="editor-panel">
+            <div class="surface-head">
+              <div>
+                <div class="section-label">Tester</div>
+                <h2>Input and TFT check</h2>
+              </div>
+              <div class="tester-actions">
+                <button id="testerFocusButton" class="command primary" type="button">Start Test</button>
+                <button id="testerClearButton" class="command subtle" type="button">Clear</button>
+              </div>
+            </div>
+            <div class="tester-grid">
+              <section id="testerCapturePad" class="tester-capture" tabindex="0" aria-label="Input tester">
+                <div class="tester-readout">
+                  <span>Last input</span>
+                  <strong id="testerLastInput">Waiting</strong>
+                </div>
+                <div class="tester-visual">
+                  <div id="testerEncoderGrid" class="tester-encoder-grid"></div>
+                  <div id="testerKeyGrid" class="tester-key-grid"></div>
+                </div>
+                <div id="testerHeldKeys" class="tester-held"></div>
+              </section>
+              <section class="tester-side">
+                <div class="tester-card">
+                  <div class="section-label">Display Test</div>
+                  <div class="tester-color-actions">
+                    <button class="display-test-button red" data-display-test="red" type="button">Red</button>
+                    <button class="display-test-button green" data-display-test="green" type="button">Green</button>
+                    <button class="display-test-button blue" data-display-test="blue" type="button">Blue</button>
+                    <button class="display-test-button reset" data-display-test="reset" type="button">Reset</button>
+                  </div>
+                </div>
+                <div class="tester-card">
+                  <div class="section-label">RGB Test</div>
+                  <div class="tester-color-actions">
+                    <button class="display-test-button red" data-rgb-test="red" type="button">Red</button>
+                    <button class="display-test-button green" data-rgb-test="green" type="button">Green</button>
+                    <button class="display-test-button blue" data-rgb-test="blue" type="button">Blue</button>
+                    <button class="display-test-button reset" data-rgb-test="reset" type="button">Reset</button>
+                  </div>
+                </div>
+                <div class="tester-card">
+                  <div class="section-label">Recent</div>
+                  <div id="testerEventLog" class="tester-event-log"></div>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section id="consolePanel" class="editor-panel console-panel">
+            <div class="surface-head">
+              <div>
+                <div class="section-label">Protocol</div>
+                <h2>Live log</h2>
+              </div>
+              <button id="clearLogButton" class="command subtle" type="button">Clear</button>
+            </div>
+            <pre id="protocolLog" class="protocol-log" aria-live="polite"></pre>
+          </section>
+        </section>
+
+        <aside class="inspector">
+          <section class="selected-card">
+            <div class="section-label">Selected</div>
+            <div class="selection-line">
+              <strong id="selectedPosition">0.0</strong>
+              <span id="selectedName">Encoder 0 switch</span>
+            </div>
+            <div id="selectedKeycode" class="selected-keycode">A</div>
+          </section>
+
+          <section id="libraryPanel" class="library">
+            <div class="library-head">
+              <div>
+                <div class="section-label">Key Library</div>
+                <h2>Assign</h2>
+              </div>
+              <div class="library-head-actions">
+                <button id="libraryExpandButton" class="command library-expand-button" type="button" aria-expanded="false">
+                  Open Library
+                </button>
+                <button id="libraryCloseButton" class="command library-close-button" type="button" hidden>
+                  Close
+                </button>
+              </div>
+            </div>
+            <label class="search-field">
+              <span>Search</span>
+              <input id="keySearch" type="search" autocomplete="off" placeholder="A, PG_UP, Volume..." />
+            </label>
+            <div id="categoryTabs" class="category-tabs" role="tablist" aria-label="Keycode categories"></div>
+            <div id="keyLibrary" class="key-library"></div>
+          </section>
+        </aside>
+      </main>
+
+      <div id="libraryBackdrop" class="library-backdrop" hidden></div>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+      <section id="macroRecorder" class="macro-recorder" hidden tabindex="-1" aria-label="Macro recorder">
+        <div class="recording-panel">
+          <div class="recording-head">
+            <div>
+              <div class="section-label">Recording</div>
+              <h2 id="recorderTitle">M0</h2>
+            </div>
+            <span id="recordingCount" class="status-pill live">0 keys</span>
+          </div>
+          <div id="recordedKeys" class="recorded-keys"></div>
+          <div class="recording-actions">
+            <button id="recordCancelButton" class="command subtle" type="button">Cancel</button>
+            <button id="recordStopButton" class="command primary" type="button">Done</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="./app.js?v=tac-w-studio-45"></script>
+  </body>
+</html>

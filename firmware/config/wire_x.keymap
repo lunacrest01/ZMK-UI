@@ -1,0 +1,78 @@
+#include <behaviors.dtsi>
+#include <dt-bindings/zmk/bt.h>
+#include <dt-bindings/zmk/keys.h>
+#include <dt-bindings/zmk/outputs.h>
+#include <dt-bindings/zmk/rgb.h>
+
+/ {
+    keymap {
+        compatible = "zmk,keymap";
+
+        default_layer {
+            bindings = <
+                &kp A            &kp B
+                &kp C            &kp D            &kp E            &none
+                &kp F            &kp G            &kp H            &kp I
+                &kp J            &kp K            &kp L            &kp M
+            >;
+
+            sensor-bindings = <&inc_dec_kp PG_DN PG_UP &inc_dec_kp C_VOL_DN C_VOL_UP>;
+        };
+
+        numbers_layer {
+            bindings = <
+                &kp N1           &kp N2
+                &kp N3           &kp N4           &kp N5           &none
+                &kp N6           &kp N7           &kp N8           &kp N9
+                &kp N0           &kp MINUS        &kp EQUAL        &kp BSPC
+            >;
+
+            sensor-bindings = <&inc_dec_kp LEFT RIGHT &inc_dec_kp DOWN UP>;
+        };
+
+        symbols_layer {
+            bindings = <
+                &kp EXCL         &kp AT
+                &kp HASH         &kp DLLR         &kp PRCNT        &none
+                &kp CARET        &kp AMPS         &kp ASTRK        &kp LPAR
+                &kp RPAR         &kp LEFT         &kp DOWN         &kp UP
+            >;
+
+            sensor-bindings = <&inc_dec_kp TAB ENTER &inc_dec_kp HOME END>;
+        };
+
+        media_layer {
+            bindings = <
+                &kp C_PLAY_PAUSE &kp C_MUTE
+                &kp C_VOL_DN     &kp C_VOL_UP     &kp C_NEXT       &none
+                &kp C_PREV       &kp HOME         &kp END          &kp DEL
+                &kp PG_UP        &kp PG_DN        &kp TAB          &kp ENTER
+            >;
+
+            sensor-bindings = <&inc_dec_kp C_PREV C_NEXT &inc_dec_kp C_VOL_DN C_VOL_UP>;
+        };
+
+        utility_layer {
+            bindings = <
+                &kp ESC          &kp SPACE
+                &kp F1           &kp F2           &kp F3           &none
+                &kp F4           &kp F5           &kp F6           &kp F7
+                &kp F8           &kp F9           &kp F10          &kp F11
+            >;
+
+            sensor-bindings = <&inc_dec_kp C_AC_SCROLL_DOWN C_AC_SCROLL_UP &inc_dec_kp C_AC_ZOOM_OUT C_AC_ZOOM_IN>;
+        };
+
+        device_layer {
+            bindings = <
+                &out OUT_USB     &out OUT_BLE
+                &bt BT_SEL 0     &bt BT_SEL 1     &bt BT_SEL 2     &none
+                &out OUT_USB     &out OUT_BLE     &bt BT_CLR_ALL   &bt BT_CLR
+                &rgb_ug RGB_TOG  &rgb_ug RGB_EFF  &rgb_ug RGB_HUI  &rgb_ug RGB_BRI
+            >;
+
+            sensor-bindings = <&inc_dec_kp C_VOL_DN C_VOL_UP &inc_dec_kp C_BRI_DN C_BRI_UP>;
+        };
+
+    };
+};

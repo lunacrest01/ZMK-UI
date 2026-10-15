@@ -1,0 +1,13 @@
+.build/
+.venv/
+.vercel/
+node_modules/
+__pycache__/
+*.py[cod]
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+firmware/uf2/SHA256SUMS.local

@@ -1,0 +1,315 @@
+diff --git a/app/include/zmk/ble.h b/app/include/zmk/ble.h
+index 92b2107d..a9b2b077 100644
+--- a/app/include/zmk/ble.h
++++ b/app/include/zmk/ble.h
+@@ -6,6 +6,8 @@
+ 
+ #pragma once
+ 
++#include <stdint.h>
++
+ #include <zmk/keys.h>
+ #include <zmk/ble/profile.h>
+ 
+@@ -25,6 +27,8 @@ int zmk_ble_prof_prev(void);
+ int zmk_ble_prof_select(uint8_t index);
+ void zmk_ble_clear_all_bonds(void);
+ int zmk_ble_prof_disconnect(uint8_t index);
++int zmk_ble_request_advertising_window(uint8_t index, uint32_t timeout_ms);
++int zmk_ble_stop_advertising_window(void);
+ 
+ int zmk_ble_active_profile_index(void);
+ int zmk_ble_profile_index(const bt_addr_le_t *addr);
+diff --git a/app/include/zmk/keymap.h b/app/include/zmk/keymap.h
+index 26fd2d16..fb808caa 100644
+--- a/app/include/zmk/keymap.h
++++ b/app/include/zmk/keymap.h
+@@ -58,6 +58,8 @@ const struct zmk_behavior_binding *zmk_keymap_get_layer_binding_at_idx(zmk_keyma
+                                                                        uint16_t binding_idx);
+ int zmk_keymap_set_layer_binding_at_idx(zmk_keymap_layer_id_t layer, uint16_t binding_idx,
+                                         const struct zmk_behavior_binding binding);
++int zmk_keymap_set_sensor_binding_at_idx(zmk_keymap_layer_id_t layer, uint16_t sensor_idx,
++                                         const struct zmk_behavior_binding binding);
+ 
+ #if IS_ENABLED(CONFIG_ZMK_KEYMAP_LAYER_REORDERING)
+ 
+diff --git a/app/module/drivers/sensor/battery/battery_common.c b/app/module/drivers/sensor/battery/battery_common.c
+index 9afe2d5b..b7d4df01 100644
+--- a/app/module/drivers/sensor/battery/battery_common.c
++++ b/app/module/drivers/sensor/battery/battery_common.c
+@@ -33,11 +33,11 @@ uint8_t lithium_ion_mv_to_pct(int16_t bat_mv) {
+     // Simple linear approximation of a battery based off adafruit's discharge graph:
+     // https://learn.adafruit.com/li-ion-and-lipoly-batteries/voltages
+ 
+-    if (bat_mv >= 4200) {
++    if (bat_mv >= 4100) {
+         return 100;
+     } else if (bat_mv <= 3450) {
+         return 0;
+     }
+ 
+-    return bat_mv * 2 / 15 - 459;
+-}
+\ No newline at end of file
++    return (uint8_t)(((int32_t)bat_mv - 3450) * 100 / 650);
++}
+diff --git a/app/module/drivers/sensor/battery/battery_voltage_divider.c b/app/module/drivers/sensor/battery/battery_voltage_divider.c
+index 62a02e9c..b55c2984 100644
+--- a/app/module/drivers/sensor/battery/battery_voltage_divider.c
++++ b/app/module/drivers/sensor/battery/battery_voltage_divider.c
+@@ -17,6 +17,10 @@
+ 
+ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
+ 
++#define BVD_DISCARD_SAMPLES 2
++#define BVD_AVERAGE_SAMPLES 16
++#define BVD_SAMPLE_DELAY_MS 2
++
+ struct io_channel_config {
+     uint8_t channel;
+ };
+@@ -62,17 +66,35 @@ static int bvd_sample_fetch(const struct device *dev, enum sensor_channel chan)
+     k_sleep(K_MSEC(10));
+ #endif // DT_INST_NODE_HAS_PROP(0, power_gpios)
+ 
+-    // Read ADC
+-    rc = adc_read(drv_data->adc, as);
+-    as->calibrate = false;
++    int32_t raw_total = 0;
++    uint8_t raw_count = 0;
++
++    for (uint8_t i = 0; i < (BVD_DISCARD_SAMPLES + BVD_AVERAGE_SAMPLES); i++) {
++        rc = adc_read(drv_data->adc, as);
++        as->calibrate = false;
++
++        if (rc != 0) {
++            break;
++        }
++
++        if (i >= BVD_DISCARD_SAMPLES) {
++            raw_total += drv_data->value.adc_raw;
++            raw_count++;
++        }
++
++        k_sleep(K_MSEC(BVD_SAMPLE_DELAY_MS));
++    }
+ 
+-    if (rc == 0) {
++    if (rc == 0 && raw_count > 0) {
++        drv_data->value.adc_raw = raw_total / raw_count;
+         int32_t val = drv_data->value.adc_raw;
+ 
+         adc_raw_to_millivolts(adc_ref_internal(drv_data->adc), drv_data->acc.gain, as->resolution,
+                               &val);
+ 
+-        uint16_t millivolts = val * (uint64_t)drv_cfg->full_ohm / drv_cfg->output_ohm;
++        uint16_t millivolts =
++            (val * (uint64_t)drv_cfg->full_ohm + (drv_cfg->output_ohm / 2)) /
++            drv_cfg->output_ohm;
+         LOG_DBG("ADC raw %d ~ %d mV => %d mV", drv_data->value.adc_raw, val, millivolts);
+         uint8_t percent = lithium_ion_mv_to_pct(millivolts);
+         LOG_DBG("Percent: %d", percent);
+diff --git a/app/src/ble.c b/app/src/ble.c
+index 51b172b9..272f37f3 100644
+--- a/app/src/ble.c
++++ b/app/src/ble.c
+@@ -20,6 +20,9 @@
+ #include <zephyr/bluetooth/uuid.h>
+ #include <zephyr/bluetooth/gatt.h>
+ #include <zephyr/bluetooth/hci_types.h>
++#if IS_ENABLED(CONFIG_BT_ZEPHYR_NUS)
++#include <zephyr/bluetooth/services/nus.h>
++#endif
+ 
+ #if IS_ENABLED(CONFIG_SETTINGS)
+ 
+@@ -59,8 +62,11 @@ enum advertising_type {
+     BT_LE_ADV_PARAM(BT_LE_ADV_OPT_CONN | BT_LE_ADV_OPT_USE_NAME | BT_LE_ADV_OPT_FORCE_NAME_IN_AD,  \
+                     BT_GAP_ADV_FAST_INT_MIN_2, BT_GAP_ADV_FAST_INT_MAX_2, NULL)
+ 
++#define ZMK_BLE_RECONNECT_WINDOW_MS 90000
++
+ static struct zmk_ble_profile profiles[ZMK_BLE_PROFILE_COUNT];
+ static uint8_t active_profile;
++static bool advertising_window_active;
+ 
+ #define DEVICE_NAME CONFIG_BT_DEVICE_NAME
+ #define DEVICE_NAME_LEN (sizeof(DEVICE_NAME) - 1)
+@@ -77,6 +83,17 @@ static struct bt_data zmk_ble_ad[] = {
+                   ),
+ };
+ 
++#if IS_ENABLED(CONFIG_BT_ZEPHYR_NUS)
++static struct bt_data zmk_ble_sd[] = {
++    BT_DATA_BYTES(BT_DATA_UUID128_ALL, BT_UUID_NUS_SRV_VAL),
++};
++#define ZMK_BLE_SD zmk_ble_sd
++#define ZMK_BLE_SD_LEN ARRAY_SIZE(zmk_ble_sd)
++#else
++#define ZMK_BLE_SD NULL
++#define ZMK_BLE_SD_LEN 0
++#endif
++
+ #if IS_ENABLED(CONFIG_ZMK_SPLIT_BLE) && IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+ 
+ static bt_addr_le_t peripheral_addrs[ZMK_SPLIT_BLE_PERIPHERAL_COUNT];
+@@ -159,7 +176,7 @@ bool zmk_ble_profile_is_connected(uint8_t index) {
+         return 0;                                                                                  \
+     }                                                                                              \
+     err = bt_le_adv_start(BT_LE_ADV_CONN_DIR_LOW_DUTY(addr), zmk_ble_ad, ARRAY_SIZE(zmk_ble_ad),   \
+-                          NULL, 0);                                                                \
++                          ZMK_BLE_SD, ZMK_BLE_SD_LEN);                                              \
+     if (err) {                                                                                     \
+         LOG_ERR("Advertising failed to start (err %d)", err);                                      \
+         return err;                                                                                \
+@@ -167,7 +184,8 @@ bool zmk_ble_profile_is_connected(uint8_t index) {
+     advertising_status = ZMK_ADV_DIR;
+ 
+ #define CHECKED_OPEN_ADV()                                                                         \
+-    err = bt_le_adv_start(ZMK_ADV_CONN_NAME, zmk_ble_ad, ARRAY_SIZE(zmk_ble_ad), NULL, 0);         \
++    err = bt_le_adv_start(ZMK_ADV_CONN_NAME, zmk_ble_ad, ARRAY_SIZE(zmk_ble_ad), ZMK_BLE_SD,       \
++                          ZMK_BLE_SD_LEN);                                                          \
+     if (err) {                                                                                     \
+         LOG_ERR("Advertising failed to start (err %d)", err);                                      \
+         return err;                                                                                \
+@@ -180,7 +198,16 @@ int update_advertising(void) {
+     struct bt_conn *conn;
+     enum advertising_type desired_adv = ZMK_ADV_NONE;
+ 
+-    if (zmk_ble_active_profile_is_open()) {
++    if (IS_ENABLED(CONFIG_BT_ZEPHYR_NUS)) {
++        /*
++         * Braxon Studio authorizes its custom NUS remap channel through a browser BLE picker.
++         * Keep discovery on a profile-button window instead of advertising forever.
++         */
++        if (advertising_window_active &&
++            (zmk_ble_active_profile_is_open() || !zmk_ble_active_profile_is_connected())) {
++            desired_adv = ZMK_ADV_CONN;
++        }
++    } else if (zmk_ble_active_profile_is_open()) {
+         desired_adv = ZMK_ADV_CONN;
+     } else if (!zmk_ble_active_profile_is_connected()) {
+         desired_adv = ZMK_ADV_CONN;
+@@ -223,6 +250,41 @@ static void update_advertising_callback(struct k_work *work) { update_advertisin
+ 
+ K_WORK_DEFINE(update_advertising_work, update_advertising_callback);
+ 
++static void advertising_window_timeout_callback(struct k_work *work) {
++    ARG_UNUSED(work);
++
++    advertising_window_active = false;
++    update_advertising();
++}
++
++K_WORK_DELAYABLE_DEFINE(advertising_window_timeout_work, advertising_window_timeout_callback);
++
++int zmk_ble_stop_advertising_window(void) {
++    advertising_window_active = false;
++    k_work_cancel_delayable(&advertising_window_timeout_work);
++    return update_advertising();
++}
++
++int zmk_ble_request_advertising_window(uint8_t index, uint32_t timeout_ms) {
++    if (index >= ZMK_BLE_PROFILE_COUNT) {
++        return -ERANGE;
++    }
++
++    advertising_window_active = true;
++    if (timeout_ms > 0) {
++        k_work_reschedule(&advertising_window_timeout_work, K_MSEC(timeout_ms));
++    } else {
++        k_work_cancel_delayable(&advertising_window_timeout_work);
++    }
++
++    int ret = zmk_ble_prof_select(index);
++    if (ret < 0) {
++        return ret;
++    }
++
++    return update_advertising();
++}
++
+ static void clear_profile_bond(uint8_t profile) {
+     if (bt_addr_le_cmp(&profiles[profile].peer, BT_ADDR_LE_ANY)) {
+         bt_unpair(BT_ID_DEFAULT, &profiles[profile].peer);
+@@ -520,6 +582,11 @@ static void connected(struct bt_conn *conn, uint8_t err) {
+ 
+     LOG_DBG("Connected %s", addr);
+ 
++    if (is_conn_active_profile(conn)) {
++        advertising_window_active = false;
++        k_work_cancel_delayable(&advertising_window_timeout_work);
++    }
++
+     update_advertising();
+ 
+     if (is_conn_active_profile(conn)) {
+@@ -543,6 +610,12 @@ static void disconnected(struct bt_conn *conn, uint8_t reason) {
+         return;
+     }
+ 
++    if (is_conn_active_profile(conn)) {
++        advertising_window_active = true;
++        k_work_reschedule(&advertising_window_timeout_work,
++                          K_MSEC(ZMK_BLE_RECONNECT_WINDOW_MS));
++    }
++
+     // We need to do this in a work callback, otherwise the advertising update will still see the
+     // connection for a profile as active, and not start advertising yet.
+     k_work_submit(&update_advertising_work);
+@@ -686,7 +759,11 @@ static void zmk_ble_ready(int err) {
+         return;
+     }
+ 
+-    update_advertising();
++    if (IS_ENABLED(CONFIG_BT_ZEPHYR_NUS)) {
++        (void)zmk_ble_request_advertising_window(active_profile, ZMK_BLE_RECONNECT_WINDOW_MS);
++    } else {
++        update_advertising();
++    }
+ }
+ 
+ static int zmk_ble_complete_startup(void) {
+diff --git a/app/src/keymap.c b/app/src/keymap.c
+index 547d6612..b48d4017 100644
+--- a/app/src/keymap.c
++++ b/app/src/keymap.c
+@@ -328,6 +328,38 @@ int zmk_keymap_set_layer_binding_at_idx(zmk_keymap_layer_id_t layer_id, uint16_t
+ }
+ 
+ #endif // IS_ENABLED(CONFIG_ZMK_KEYMAP_SETTINGS_STORAGE)
++
++#if ZMK_KEYMAP_HAS_SENSORS
++
++int zmk_keymap_set_sensor_binding_at_idx(zmk_keymap_layer_id_t layer_id, uint16_t sensor_idx,
++                                         const struct zmk_behavior_binding binding) {
++    if (sensor_idx >= ZMK_KEYMAP_SENSORS_LEN) {
++        return -EINVAL;
++    }
++
++    ASSERT_LAYER_VAL(layer_id, -EINVAL)
++
++    if (memcmp(&zmk_sensor_keymap[layer_id][sensor_idx], &binding, sizeof(binding)) == 0) {
++        return 0;
++    }
++
++    // Sensor settings storage is not available yet, so this is a runtime-only remap.
++    memcpy(&zmk_sensor_keymap[layer_id][sensor_idx], &binding, sizeof(binding));
++    return 0;
++}
++
++#else
++
++int zmk_keymap_set_sensor_binding_at_idx(zmk_keymap_layer_id_t layer_id, uint16_t sensor_idx,
++                                         const struct zmk_behavior_binding binding) {
++    ARG_UNUSED(layer_id);
++    ARG_UNUSED(sensor_idx);
++    ARG_UNUSED(binding);
++    return -ENOTSUP;
++}
++
++#endif /* ZMK_KEYMAP_HAS_SENSORS */
++
+ #if IS_ENABLED(CONFIG_ZMK_KEYMAP_LAYER_REORDERING)
+ 
+ #if IS_ENABLED(CONFIG_ZMK_KEYMAP_SETTINGS_STORAGE)

@@ -1,0 +1,80 @@
+#include <zephyr/dt-bindings/mipi_dbi/mipi_dbi.h>
+
+&pinctrl {
+	spi2_default: spi2_default {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK, 0, 12)>,
+				<NRF_PSEL(SPIM_MOSI, 1, 2)>;
+		};
+	};
+
+	spi2_sleep: spi2_sleep {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK, 0, 12)>,
+				<NRF_PSEL(SPIM_MOSI, 1, 2)>;
+			low-power-enable;
+		};
+	};
+};
+
+&spi2 {
+	compatible = "nordic,nrf-spim";
+	status = "okay";
+	cs-gpios = <&gpio1 13 GPIO_ACTIVE_LOW>;
+};
+
+/ {
+	aliases {
+		wire-x-backlight = &wire_x_display_power;
+	};
+
+	chosen {
+		zephyr,display = &wire_x_st7789;
+	};
+
+	display_power {
+		compatible = "gpio-leds";
+		wire_x_display_power: display_power_led {
+			gpios = <&gpio1 7 GPIO_ACTIVE_HIGH>;
+			label = "TAC-W Display Power";
+		};
+	};
+
+	mipi_dbi_wire_x_st7789 {
+		compatible = "zephyr,mipi-dbi-spi";
+		spi-dev = <&spi2>;
+		dc-gpios = <&gpio0 31 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio0 29 GPIO_ACTIVE_LOW>;
+		write-only;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		wire_x_st7789: st7789v@0 {
+			compatible = "sitronix,st7789v";
+			reg = <0>;
+			mipi-max-frequency = <16000000>;
+			width = <240>;
+			height = <135>;
+			x-offset = <40>;
+			y-offset = <53>;
+
+			vcom = <0x28>;
+			gctrl = <0x35>;
+			vrhs = <0x10>;
+			vdvs = <0x20>;
+			mdac = <0x60>;
+			gamma = <0x01>;
+			colmod = <0x55>;
+			lcm = <0x2c>;
+			porch-param = [0c 0c 00 33 33];
+			cmd2en-param = [5a 69 02 00];
+			pwctrl1-param = [a4 a1];
+			pvgam-param = [d0 00 02 07 0a 28 32 44 42 06 0e 12 14 17];
+			nvgam-param = [d0 00 02 07 0a 28 31 54 47 0e 1c 17 1b 1e];
+			ram-param = [00 f0];
+			rgb-param = [40 02 14];
+			mipi-mode = "MIPI_DBI_MODE_SPI_4WIRE";
+		};
+	};
+
+};
